@@ -12,6 +12,6 @@ def test1(test=None):
     test
     """
     if test:
-        server.error(499, "my custom error")
+        raise server.error(499, "my custom error")
     return "hi"
 server.run()

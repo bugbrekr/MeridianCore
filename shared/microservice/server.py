@@ -73,31 +73,31 @@ class Server:
     def __init__(self, config_file="config/config.toml", auth_tokens_file="config/auth_tokens"):
         with open(config_file, encoding="utf-8") as f:
             config = toml.loads(f.read())
-        self.auth_tokens_file = auth_tokens_file
+        self._auth_tokens_file = auth_tokens_file
         if not os.path.isfile(auth_tokens_file):
             open(auth_tokens_file, "w", encoding="utf-8").close()
-        self.service_name = config["service"]["name"]
-        self.port = config["service"]["port"]
-        self.host = config["service"].get("host", "127.0.0.1")
-        self.bottle_app = bottle.Bottle()
-        self.bottle_app.route("/call", "POST", self._bottle_request)
+        self._service_name = config["service"]["name"]
+        self._port = config["service"]["port"]
+        self._host = config["service"].get("host", "127.0.0.1")
+        self._bottle_app = bottle.Bottle()
+        self._bottle_app.route("/call", "POST", self._bottle_request)
         self._error = HTTPErrorResponses()
-        self.bottle_app.default_error_handler = self._error.bottle_error_handler
-        self.registered_methods = {}
+        self._bottle_app.default_error_handler = self._error.bottle_error_handler
+        self._registered_methods = {}
     def method(self, func):
         """
         Decorator to register a method.
         """
         method_name = func.__name__
-        self.registered_methods[method_name] = func
+        self._registered_methods[method_name] = func
     def error(self, code, message=None):
         """
         Returns an error.
-        `return server.error(404, "Not found")`
+        `raise server.error(404, "Not found")`
         """
-        raise MethodError(code, message)
+        return MethodError(code, message)
     def _authenticate_token(self, auth_token):
-        with open(self.auth_tokens_file, encoding="utf-8") as f:
+        with open(self._auth_tokens_file, encoding="utf-8") as f:
             auth_tokens = [i.strip() for i in f.readlines()]
         return auth_token in auth_tokens
     def _bottle_request(self):
@@ -129,9 +129,9 @@ class Server:
         if not isinstance(request.get("data"), dict):
             return self._error.error(400, "data parameter must be type dict.")
         method_name = request["method"]
-        if method_name not in self.registered_methods:
+        if method_name not in self._registered_methods:
             return self._error.error(404, "Specified method does not exist.")
-        method_func = self.registered_methods[method_name]
+        method_func = self._registered_methods[method_name]
         try:
             response = method_func(**request["data"])
         except MethodError as e:
@@ -152,13 +152,20 @@ class Server:
             })
         except (ValueError, TypeError):
             return self._error.error(500, "Error while encoding response!")
+    def _method_list_route(self):
+        bottle.response.add_header("Content-Type", "application/msgpack")
+        return msgpack.dumps(list(self._registered_methods.keys()))
+    def _create_method_list_route(self):
+        self._bottle_app.route("/list", "GET", self._method_list_route)
     def run(self):
         """
         Runs the service server.
         """
-        self.bottle_app.run(host=self.host, port=self.port, server="auto")
-    def get_wsgi_app(self):
+        self._create_method_list_route()
+        self._bottle_app.run(host=self._host, port=self._port, server="auto")
+    def _get_wsgi_app(self):
         """
         Get the WSGI app for deployment with other servers.
         """
-        return self.bottle_app
+        self._create_method_list_route()
+        return self._bottle_app

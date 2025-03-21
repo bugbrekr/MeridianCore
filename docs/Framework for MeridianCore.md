@@ -83,7 +83,7 @@ Every request and response is encoded with MessagePack (chosen for versatility a
 {
     "code": 200,
     "success": true,
-    "error": "Error message. Only if success is false",
+    "error": "An error message.",
     "data": {
         "arg1": "param1",
         "arg2": "param2",
@@ -91,6 +91,8 @@ Every request and response is encoded with MessagePack (chosen for versatility a
     }
 }
 ```
+`data` exists only if `success` is `true`.\
+Similarly, `error` exists only if `success` is `false`.
 
 **Note on `code` in response:**\
 The response `code` mimics the utility of HTTP response codes. In fact, their format is also the same:
@@ -98,6 +100,6 @@ The response `code` mimics the utility of HTTP response codes. In fact, their fo
 > 2xx - Success\
 > 3xx - No idea yet.\
 > 4xx - Client error\
-> 5xx - A very bad server error, is definitely reported in the logs.
+> 5xx - A very bad server error, should be definitely reported in the logs.
 
 Anyways, these codes will be documented in-detail in a separate document, later.
