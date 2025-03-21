@@ -15,10 +15,10 @@ We will use a custom MessagePack-based protocol over HTTP for inter-microservice
 We will call this protocol micro-prot. cuz its micro and its a protocol.
 
 Here are some rules that each service will follow:
-  1. Communication must take place only between consecutive layers and they must flow only upwards (only **E** to **A**). So one-way inter-layer, not intra-layer. This is for organisation and better security. (helps track communication easier)
+  1. Communication must take place only between consecutive layer classes and they must flow only upwards (only **E** to **A**). So one-way inter-layer, not intra-layer. This is for organisation and better security.
   2. Layers **A** & **B** must use micro-auth for incoming requests.
   Layers **C** & **D** will have to use micro-auth for outgoing requests to layer **A** & **B**.
-  3. Layers **C** & **D** MUST (in most cases) implement user-facing authentication by using **A**-series microservices.
+  1. Layers **C** & **D** MUST (in most cases) implement user-facing authentication by using **A**-series microservices.
 
 With the above rules, an example flow of requests would look like this:
 ```
@@ -95,9 +95,11 @@ Every request and response is encoded with MessagePack (chosen for versatility a
 ```
 
 **Note on `code` in response:**\
-The response `code` mimics the utility of HTTP response codes. In fact, their format is also the same:\
+The response `code` mimics the utility of HTTP response codes. In fact, their format is also the same:
 > 1xx - Information\
 > 2xx - Success\
 > 3xx - No idea yet.\
 > 4xx - Client error\
 > 5xx - A very bad server error, is definitely reported in the logs.
+
+Anyways, these codes will be documented in-detail in a separate document, later.
