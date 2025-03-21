@@ -9,6 +9,14 @@ import toml
 import bottle
 import msgpack
 
+class MethodError(Exception):
+    """
+    Custom error that's called internally when a method does `server.error()`
+    """
+    def __init__(self, code, message):
+        self.code = code
+        self.message = message
+
 class HTTPErrorResponses:
     """
     Returns a MessagePack response for HTTP errors.
@@ -66,22 +74,28 @@ class Server:
         with open(config_file, encoding="utf-8") as f:
             config = toml.loads(f.read())
         self.auth_tokens_file = auth_tokens_file
+        if not os.path.isfile(auth_tokens_file):
+            open(auth_tokens_file, "w", encoding="utf-8").close()
         self.service_name = config["service"]["name"]
         self.port = config["service"]["port"]
         self.host = config["service"].get("host", "127.0.0.1")
         self.bottle_app = bottle.Bottle()
         self.bottle_app.route("/call", "POST", self._bottle_request)
-        self.error = HTTPErrorResponses()
-        self.bottle_app.default_error_handler = self.error.bottle_error_handler
+        self._error = HTTPErrorResponses()
+        self.bottle_app.default_error_handler = self._error.bottle_error_handler
         self.registered_methods = {}
-        if not os.path.isfile(auth_tokens_file):
-            open(auth_tokens_file, "w", encoding="utf-8").close()
     def method(self, func):
         """
         Decorator to register a method.
         """
         method_name = func.__name__
         self.registered_methods[method_name] = func
+    def error(self, code, message=None):
+        """
+        Returns an error.
+        `return server.error(404, "Not found")`
+        """
+        raise MethodError(code, message)
     def _authenticate_token(self, auth_token):
         with open(self.auth_tokens_file, encoding="utf-8") as f:
             auth_tokens = [i.strip() for i in f.readlines()]
@@ -89,6 +103,15 @@ class Server:
     def _bottle_request(self):
         raw_data = bottle.request.body.read()
         bottle.response.add_header("Content-Type", "application/msgpack")
+        if not isinstance(bottle.request.headers.get("Authorization"), str):
+            return self._error.error(401, "Authorization header missing.")
+        authorization_header = bottle.request.headers["Authorization"]
+        match = re.match(r"^Bearer\s+([A-Za-z0-9\-_]+)$", authorization_header)
+        if not match:
+            return self._error.error(400, "Authorization header format incorrect.")
+        is_authenticated = self._authenticate_token(match.group(1))
+        if not is_authenticated:
+            return self._error.error(403, "auth_token invalid.")
         try:
             request = msgpack.loads(raw_data)
         except (
@@ -100,25 +123,23 @@ class Server:
             msgpack.exceptions.StackError,
             msgpack.exceptions.UnpackException
         ):
-            return self.error.error(400, "Content not MessagePack format.")
+            return self._error.error(400, "Content not MessagePack format.")
         if not isinstance(request.get("method"), str) and request["method"] != "":
-            return self.error.error(400, "method parameter must be type str and cannot be empty.")
+            return self._error.error(400, "method parameter must be type str and cannot be empty.")
         if not isinstance(request.get("data"), dict):
-            return self.error.error(400, "data parameter must be type dict.")
-        if not isinstance(bottle.request.headers.get("Authorization"), str):
-            return self.error.error(401, "Authorization header missing.")
-        authorization_header = bottle.request.headers["Authorization"]
-        match = re.match(r"^Bearer\s+([A-Za-z0-9\-_]+)$", authorization_header)
-        if not match:
-            return self.error.error(400, "Authorization header format incorrect.")
-        is_authenticated = self._authenticate_token(match.group(1))
-        if not is_authenticated:
-            return self.error.error(403, "auth_token invalid.")
+            return self._error.error(400, "data parameter must be type dict.")
         method_name = request["method"]
         if method_name not in self.registered_methods:
-            return self.error.error(404, "Specified method does not exist.")
+            return self._error.error(404, "Specified method does not exist.")
         method_func = self.registered_methods[method_name]
-        response = method_func(**request["data"])
+        try:
+            response = method_func(**request["data"])
+        except MethodError as e:
+            return self._error.error(e.code, e.message)
+        except TypeError as e:
+            return self._error.error(400, str(e))
+        except Exception as e:
+            raise e from e
         if response is None:
             response = {}
         elif not isinstance(response, dict):
@@ -130,7 +151,7 @@ class Server:
                 "data": response
             })
         except (ValueError, TypeError):
-            return self.error.error(500, "Error while encoding response!")
+            return self._error.error(500, "Error while encoding response!")
     def run(self):
         """
         Runs the service server.
