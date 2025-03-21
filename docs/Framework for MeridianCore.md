@@ -43,25 +43,24 @@ A: To let more complex service interactions. Let's say we have all the required 
 
 ### micro-auth
 It's an absolutely simple authentication system that's meant to be used in communication between layers **A**, **B**, **C** and **D**.\
-The idea is to have a config file in each service that includes tokens which have (a) a port number and (b) an auth token embedded in the token. The port number is of the service server, and the auth token is to authenticate with said server.
+The idea is to have a config file in each service that includes access tokens which have (a) the service name (b) the service server's port number and (c) an auth token embedded in the access token. The auth token is used to authenticate with said server.
 
-Here is how a token is produced.
+Here is how an access_token is produced.
 ```python
 import base64
 import secrets
 
-service_name = "RFIDAuthDB"
+service_name = "a0-IDAuthDB"
 port = 40123
 auth_token = secrets.token_hex(16)
 
 encoded_port = base64.b64encode(port.to_bytes(2)).decode() # nLs=
-encoded_service_name = base64.b64encode(service_name.encode()).decode() # UkZJREF1dGhEQg==
 
-token = f"{encoded_service_name}.{encoded_port}.{auth_token}"
-# UkZJREF1dGhEQg==.nLs=.9ad0390ca49c850cd3e9a30a6a5f7974
+access_token = f"{service_name}.{encoded_port}.{auth_token}"
+# a0-IDAuthDB.nLs=.9ad0390ca49c850cd3e9a30a6a5f7974
 ```
 
-and this `token` will be distributed to ONE service (by including in its config file) that needs to talk to this service. This way, just by reading the config file, the service knows it has access to so and so services and all the information it needs to communicate with them, all the while maintaining basic security.
+and this `access_token` will be distributed to ONE service (by including in its config file) that needs to talk to this service. This way, just by reading the config file, the service knows it has access to so and so services and all the information it needs to communicate with them, all the while maintaining basic security.
 
 ### micro-prot
 Super simple MessagePack-based protocol for inter-microservice communication.\
@@ -70,7 +69,7 @@ Every request and response is encoded with MessagePack (chosen for versatility a
 **Request:**
 ```json
 {
-    "call": "<method_name to call>",
+    "method": "<method name to call>",
     "data": {
         "arg1": "param1",
         "arg2": "param2",
@@ -82,10 +81,9 @@ Every request and response is encoded with MessagePack (chosen for versatility a
 **Response:**
 ```json
 {
-    "call": "<method_name called>",
-    "code": 201,
+    "code": 200,
     "success": true,
-    "error": "Error message. (exists only if success is false)",
+    "error": "Error message. Only if success is false",
     "data": {
         "arg1": "param1",
         "arg2": "param2",

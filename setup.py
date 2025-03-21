@@ -13,6 +13,7 @@ setup(
     install_requires=[
         "bottle",
         "msgpack",
-        "toml"
+        "toml",
+        "requests"
     ]
 )

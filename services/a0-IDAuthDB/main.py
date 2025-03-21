@@ -2,6 +2,15 @@
 a0-IDAuthDB
 """
 
-import shared.microservice
+from shared.microservice import Server
 
-server = shared.microservice.server.Server()
+server = Server()
+
+@server.method
+def test1():
+    """
+    test
+    """
+    return {"hi": "bye"}
+
+server.run()
